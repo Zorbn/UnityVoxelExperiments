@@ -301,10 +301,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7519a6248a524f768a7971b86b095fbc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  chunkPool: {fileID: 578847147}
   playerTransform: {fileID: 1285461683}
+  chunkPool: {fileID: 578847147}
   chunkRenderer: {fileID: 3481666464949520720, guid: e4f95d27ed15a014fb6a36f871c4195d, type: 3}
-  worldSizeInChunks: 81
+  worldSizeInChunks: 162
   worldHeightInChunks: 8
   chunkSize: 32
 --- !u!4 &578847146
@@ -580,7 +580,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 1296
   field of view: 60
   orthographic: 0
   orthographic size: 5

@@ -52,13 +52,30 @@ namespace Lod
                         bool block = world.GetVoxel(x, y, z);
         
                         if (!block) continue;
-        
-                        if (!world.GetVoxel(x + lod, y, z)) GenerateFace(Direction.XPos, i, j, k, lod);
-                        if (!world.GetVoxel(x - lod, y, z)) GenerateFace(Direction.XNeg, i, j, k, lod);
-                        if (!world.GetVoxel(x, y + lod, z)) GenerateFace(Direction.YPos, i, j, k, lod);
-                        if (!world.GetVoxel(x, y - lod, z)) GenerateFace(Direction.YNeg, i, j, k, lod);
-                        if (!world.GetVoxel(x, y, z + lod)) GenerateFace(Direction.ZPos, i, j, k, lod);
-                        if (!world.GetVoxel(x, y, z - lod)) GenerateFace(Direction.ZNeg, i, j, k, lod);
+
+                        // Calculate which faces of this block will be visible.
+                        // Faces of blocks that normally wouldn't be considered visible but are on the edge of the chunk and
+                        // visible from at least one other direction are also added to the mesh to hide seams at LOD boundaries.
+                        // TODO: Apply the lod seam logic to the Y direction (when visible on X or Z).
+                        bool visibleYPos = !world.GetVoxel(x, y + lod, z);
+                        bool visibleYNeg = !world.GetVoxel(x, y - lod, z);
+                        bool visibleY = visibleYPos || visibleYNeg;
+                        bool visibleXPos = !world.GetVoxel(x + lod, y, z);
+                        bool visibleXNeg = !world.GetVoxel(x - lod, y, z);
+                        bool visibleX = visibleXPos || visibleXNeg;
+                        bool visibleZPos = !world.GetVoxel(x, y, z + lod);
+                        bool visibleZNeg = !world.GetVoxel(x, y, z - lod);
+                        bool visibleZ = visibleZPos || visibleZNeg;
+
+                        bool visibleYOrX = visibleY || visibleX;
+                        bool visibleYOrZ = visibleY || visibleZ;
+                        
+                        if ((visibleYOrZ && i == size - lod) || visibleXPos) GenerateFace(Direction.XPos, i, j, k, lod);
+                        if ((visibleYOrZ && i == 0) || visibleXNeg) GenerateFace(Direction.XNeg, i, j, k, lod);
+                        if (visibleYPos) GenerateFace(Direction.YPos, i, j, k, lod);
+                        if (visibleYNeg) GenerateFace(Direction.YNeg, i, j, k, lod);
+                        if ((visibleYOrX && k == size - lod) || visibleZPos) GenerateFace(Direction.ZPos, i, j, k, lod);
+                        if ((visibleYOrX && k == 0) || visibleZNeg) GenerateFace(Direction.ZNeg, i, j, k, lod);
                     }
                 }
             }
@@ -74,7 +91,7 @@ namespace Lod
         private void GenerateFace(Direction dir, int x, int y, int z, int lod)
         {
             int baseVertex = vertices.Count;
-        
+
             int dirI = (int)dir;
             for (int i = 0; i < 4; i++)
             {

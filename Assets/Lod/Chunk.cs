@@ -25,7 +25,7 @@ namespace Lod
                 {
                     int x = i + chunkX;
                     int z = k + chunkZ;
-                    float height = (Mathf.PerlinNoise(x * 0.17f, z * 0.17f) + 0.8f * Mathf.PerlinNoise(x * 0.07f, z * 0.07f) * 0.2f) * 128;
+                    float height = (Mathf.PerlinNoise(x * 0.0015f, z * 0.0015f) + 0.6f * Mathf.PerlinNoise(x * 0.01f, z * 0.01f) * 0.4f) * 256;
                     int maxY = (int)Math.Min(chunkY + size, height);
                     
                     for (int y = chunkY; y < maxY; y++)
