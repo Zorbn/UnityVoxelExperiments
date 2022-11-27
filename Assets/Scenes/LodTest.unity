@@ -300,16 +300,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7519a6248a524f768a7971b86b095fbc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ChunkRenderer: {fileID: 3481666464949520720, guid: e4f95d27ed15a014fb6a36f871c4195d, type: 3}
-  worldWidthInChunks: 81
+  playerTransform: {fileID: 1285461683}
+  chunkRenderer: {fileID: 3481666464949520720, guid: e4f95d27ed15a014fb6a36f871c4195d, type: 3}
+  worldSizeInChunks: 81
   worldHeightInChunks: 8
-  worldDepthInChunks: 81
   chunkSize: 32
-  playerChunkX: 40
-  playerChunkY: 0
-  playerChunkZ: 40
-  maxLod: 3
-  lodFalloff: 0.2
 --- !u!4 &578847146
 Transform:
   m_ObjectHideFlags: 0
@@ -531,6 +526,7 @@ GameObject:
   - component: {fileID: 1285461683}
   - component: {fileID: 1285461682}
   - component: {fileID: 1285461681}
+  - component: {fileID: 1285461684}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -604,3 +600,16 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1285461684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1285461680}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c855591e22a7e334ebe661bf7c2d8e3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mouseSensitivity: 2

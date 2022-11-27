@@ -1,51 +1,108 @@
-﻿using System;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace Lod
 {
-    // TODO: Make lod chunks have the same number of voxels per chunk but at a larger scale so that less chunks are needed
     public class WorldRenderer : MonoBehaviour
     {
-        public World world;
-        public GameObject ChunkRenderer;
+        public Transform playerTransform;
+        public GameObject chunkRenderer;
         public int worldSizeInChunks = 81;
         public int worldHeightInChunks = 2;
         public int chunkSize = 32;
-        public int playerChunkX = 4;
-        public int playerChunkY = 0;
-        public int playerChunkZ = 4;
-        public int maxLod = 4;
-        public float lodFalloff = 0.4f;
+        private Stopwatch sw;
+        private ConcurrentBag<QueuedRenderer> queuedRenders = new();
 
+        private World world;
         private RenderTree renderTree;
+
+        private Vector3Int playerChunkPos;
+
+        private struct QueuedRenderer
+        {
+            public ChunkRenderer Renderer;
+            public RenderTree.ChunkData Data;
+        }
         
+        private readonly Dictionary<Vector3Int, GameObject> loadedChunks = new();
+
         public void Start()
         {
             world = new World(worldSizeInChunks, worldHeightInChunks, worldSizeInChunks, chunkSize);
             world.Generate();
+            
+            renderTree = new RenderTree(worldSizeInChunks, worldHeightInChunks);
 
-            renderTree = new RenderTree(worldSizeInChunks, playerChunkX * chunkSize, playerChunkZ * chunkSize);
-            foreach (RenderTree.ChunkData data in renderTree.chunkPositions)
+            Thread meshingThread = new Thread(MeshingThread);
+            meshingThread.Start();
+            
+            // UpdateChunks();
+        }
+
+        private void MeshingThread()
+        {
+            while (true)
             {
-                GameObject chunkRenderer = Instantiate(ChunkRenderer, new Vector3(data.X, 0, data.Z), Quaternion.identity);
-                chunkRenderer.GetComponent<ChunkRenderer>().GenerateMesh(world, data.X, 0, data.Z, data.Lod);
+                while (queuedRenders.TryTake(out QueuedRenderer next))
+                {
+                    if (next.Renderer == null) continue;
+                    
+                    next.Renderer.GenerateMesh(world, next.Data.Pos.x, next.Data.Pos.y, next.Data.Pos.z, next.Data.Lod);
+                }
+            }
+        }
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.G))
+            {
+                UpdateChunks();
+            }
+
+            Vector3Int newPlayerChunkPos = Vector3Int.FloorToInt(playerTransform.position / chunkSize) * chunkSize;
+
+            if (playerChunkPos != newPlayerChunkPos)
+            {
+                UpdateChunks();
             }
             
-            // for (int x = 0; x < world.WidthChunks; x++)
-            // {
-            //     for (int y = 0; y < world.HeightChunks; y++)
-            //     {
-            //         for (int z = 0; z < world.DepthChunks; z++)
-            //         {
-            //             float dist = Distance(x, y, z, playerChunkX, playerChunkY, playerChunkZ);
-            //
-            //             int lod = (int)MathF.Min(dist * lodFalloff, maxLod);
-            //
-            //             GameObject chunkRenderer = Instantiate(ChunkRenderer, new Vector3(x * chunkSize, y * chunkSize, z * chunkSize), Quaternion.identity);
-            //             chunkRenderer.GetComponent<ChunkRenderer>().GenerateMesh(world, x * chunkSize, y * chunkSize, z * chunkSize, lod);
-            //         }
-            //     }   
-            // }
+            playerChunkPos = newPlayerChunkPos;
+        }
+
+        private void UpdateChunks()
+        {
+            Vector3Int playerPos = Vector3Int.RoundToInt(playerTransform.position);
+
+            sw = new();
+            sw.Start();
+            renderTree.Update(playerPos.x, playerPos.y, playerPos.z);
+            Debug.Log($"{sw.ElapsedMilliseconds} -> {renderTree.AddChunkPositions.Count}, {renderTree.RemoveChunkPositions.Count}");
+            sw.Reset();
+
+            foreach (RenderTree.ChunkData data in renderTree.RemoveChunkPositions)
+            {
+                GameObject oldChunk = loadedChunks[data.Pos];
+                loadedChunks.Remove(data.Pos);
+                Destroy(oldChunk);
+            }
+            
+            sw.Start();
+            foreach (RenderTree.ChunkData data in renderTree.AddChunkPositions)
+            {
+                GameObject newChunk = Instantiate(chunkRenderer, data.Pos, Quaternion.identity);
+                queuedRenders.Add(new QueuedRenderer
+                {
+                    Data = data,
+                    Renderer = newChunk.GetComponent<ChunkRenderer>()
+                });
+                loadedChunks.Add(data.Pos, newChunk);
+            }
+            Debug.Log($"{sw.ElapsedMilliseconds}");
+            sw.Reset();
         }
     }
 }

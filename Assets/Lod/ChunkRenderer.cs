@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -14,6 +15,7 @@ namespace Lod
 
         private List<Vector3> vertices = new();
         private List<int> indices = new();
+        private bool needsUpdate;
         
         private void Awake()
         {
@@ -36,11 +38,11 @@ namespace Lod
 
             int size = world.ChunkSize * lod;
             
-            for (int i = 0; i < size; i += lod)
+            for (int k = 0; k < size; k += lod)
             {
                 for (int j = 0; j < size; j += lod)
                 {
-                    for (int k = 0; k < size; k += lod)
+                    for (int i = 0; i < size; i += lod)
                     {
                         int x = chunkX + i;
                         int y = chunkY + j;
@@ -59,11 +61,20 @@ namespace Lod
                     }
                 }
             }
-        
-            mesh.SetVertices(vertices);
-            mesh.SetIndices(indices, MeshTopology.Triangles, 0);
+
+            needsUpdate = true;
         }
-        
+
+        private void Update()
+        {
+            if (needsUpdate)
+            {
+                mesh.SetVertices(vertices);
+                mesh.SetIndices(indices, MeshTopology.Triangles, 0);
+                needsUpdate = false;
+            }
+        }
+
         private void GenerateFace(Direction dir, int x, int y, int z, int lod)
         {
             int baseVertex = vertices.Count;

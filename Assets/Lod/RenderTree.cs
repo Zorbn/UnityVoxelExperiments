@@ -9,94 +9,191 @@ namespace Lod
         public const int PlayerNearSize = 128;
         public const int PlayerMidSize = 256;
         public const int ChunkSize = 32;
+        public const int MaxLod = 2;
 
         public struct ChunkData
         {
-            public int X;
-            public int Z;
+            public Vector3Int Pos;
             public int Lod;
 
-            public ChunkData(int x, int z, int lod)
+            public ChunkData(int x, int y, int z, int lod)
             {
-                X = x;
-                Z = z;
+                Pos = new Vector3Int(x, y, z);
                 Lod = lod;
             }
         }
         
         public struct RenderNode
         {
-            public RenderNode[] children;
-            public int lod;
-            public int x, z;
-            public int size;
-            public int halfSize;
+            public RenderNode[] Children;
+            public bool HasChildren;
+            public int Lod;
+            public int X, Y, Z;
+            public int Size;
+            public bool Active;
+            public int HalfSize;
 
-            public RenderNode(int x, int z, int size, int lod)
+            public RenderNode(int x, int y, int z, int size, int lod)
             {
-                this.lod = lod;
-                this.x = x;
-                this.z = z;
-                this.size = size;
-                halfSize = size / 2;
-                children = new RenderNode[4];
+                Lod = lod;
+                X = x;
+                Y = y;
+                Z = z;
+                Size = size;
+                HalfSize = size / 2;
+                Active = true;
+                HasChildren = false;
+                Children = new RenderNode[8];
             }
 
-            public void Update(int playerX, int playerZ, List<ChunkData> chunkPositions)
+            public RenderNode InactiveNode()
             {
-                float distance = Distance(playerX, 0, playerZ, x + halfSize, 0, z + halfSize);
+                return new RenderNode
+                {
+                    Active = false,
+                    HasChildren = false,
+                };
+            }
+
+            public void Update(int playerX, int playerY, int playerZ, List<ChunkData> addChunkPositions,
+                List<ChunkData> removeChunkPositions, RenderNode oldNode, bool firstGen)
+            {
+                float distance = Distance(playerX, playerY, playerZ, X + HalfSize, Y + HalfSize, Z + HalfSize);
                 
-                if (distance < PlayerNearSize && lod != 0)
+                if (distance < PlayerNearSize && Lod != 0)
                 {
-                    Split(playerX, playerZ, chunkPositions);
+                    Split(playerX, playerY, playerZ, addChunkPositions, removeChunkPositions, oldNode, firstGen);
                 }
-                else if (distance < PlayerMidSize && lod > 1)
+                else if (distance < PlayerMidSize && Lod > 1)
                 {
-                    Split(playerX, playerZ, chunkPositions);
+                    Split(playerX, playerY, playerZ, addChunkPositions, removeChunkPositions, oldNode, firstGen);
                 }
                 else
                 {
-                    // No need to split
-                    chunkPositions.Add(new ChunkData(x, z, lod));
+                    // No need to split.
+                    if (firstGen || oldNode.HasChildren || !oldNode.Active)
+                    {
+                        if (!firstGen && oldNode.Active)
+                        {
+                            // Remove children of old node.
+                            oldNode.RemoveBranch(removeChunkPositions);
+                        }
+
+                        // Add this node.
+                        addChunkPositions.Add(new ChunkData(X, Y, Z, Lod));
+                    }
                 }
             }
 
-            private void Split(int playerX, int playerZ, List<ChunkData> chunkPositions)
+            private void Split(int playerX, int playerY, int playerZ, List<ChunkData> addChunkPositions,
+                List<ChunkData> removeChunkPositions, RenderNode oldNode, bool firstGen)
             {
-                int newLod = lod - 1;
-                int newSize = GetChunkSize(newLod);
-                children[0] = new RenderNode(x, z, newSize, newLod);
-                children[1] = new RenderNode(x + halfSize, z, newSize, newLod);
-                children[2] = new RenderNode(x, z + halfSize, newSize, newLod);
-                children[3] = new RenderNode(x + halfSize, z + halfSize, newSize, newLod);
+                HasChildren = true;
+                
+                int newLod = Lod - 1;
+                int newSize = ChunkSize * GetChunkScale(newLod);
+                Children[0] = new RenderNode(X, Y, Z, newSize, newLod);
+                Children[1] = new RenderNode(X + HalfSize, Y, Z, newSize, newLod);
+                Children[2] = new RenderNode(X, Y + HalfSize, Z, newSize, newLod);
+                Children[3] = new RenderNode(X, Y, Z + HalfSize, newSize, newLod);
+                Children[4] = new RenderNode(X + HalfSize, Y + HalfSize, Z, newSize, newLod);
+                Children[5] = new RenderNode(X, Y + HalfSize, Z + HalfSize, newSize, newLod);
+                Children[6] = new RenderNode(X + HalfSize, Y, Z + HalfSize, newSize, newLod);
+                Children[7] = new RenderNode(X + HalfSize, Y + HalfSize, Z + HalfSize, newSize, newLod);
 
-                for (int i = 0; i < 4; i++)
+                bool oldNodeWasLeaf = !oldNode.HasChildren;
+
+                // If this node is splitting and the old node didn't, then the old node is outdated.
+                if (!firstGen && oldNodeWasLeaf && oldNode.Active)
                 {
-                    children[i].Update(playerX, playerZ, chunkPositions);
+                    removeChunkPositions.Add(new ChunkData(X, Y, Z, Lod));
+                }
+
+                for (int i = 0; i < 8; i++)
+                {
+                    RenderNode oldChild = oldNodeWasLeaf ? InactiveNode() : oldNode.Children[i];
+                    Children[i].Update(playerX, playerY, playerZ, addChunkPositions, removeChunkPositions, oldChild, firstGen);
+                }
+            }
+
+            private void RemoveBranch(List<ChunkData> removeChunkPositions)
+            {
+                if (HasChildren)
+                {
+                    for (int i = 0; i < 8; i++)
+                    {
+                        Children[i].RemoveBranch(removeChunkPositions);
+                    }
+                }
+                else
+                {
+                    removeChunkPositions.Add(new ChunkData(X, Y, Z, Lod));
                 }
             }
         }
 
-        public RenderNode[] nodes;
-        public List<ChunkData> chunkPositions = new();
+        private RenderNode[][] nodes;
+        private RenderNode[] currentNodes;
+        private RenderNode[] oldNodes;
+        private int currentNodesI;
+        private int lodSizeChunks, lodHeightChunks, maxLodChunkSize;
+        private bool firstGen = true;
+        public readonly List<ChunkData> AddChunkPositions = new();
+        public readonly List<ChunkData> RemoveChunkPositions = new();
         
-        public RenderTree(int sizeChunks, int playerX, int playerZ)
+        public RenderTree(int sizeChunks, int heightChunks)
         {
-            int lodSize = sizeChunks /  4;
+            int scale = GetChunkScale(MaxLod);
+            maxLodChunkSize = ChunkSize * scale;
 
-            nodes = new RenderNode[lodSize * lodSize];
+            lodSizeChunks = sizeChunks / scale;
+            lodHeightChunks = heightChunks / scale;
 
-            int i = 0;
-            for (int x = 0; x < lodSize; x++)
+            nodes = new RenderNode[2][];
+
+            for (int n = 0; n < 2; n++)
             {
-                for (int z = 0; z < lodSize; z++)
+                nodes[n] = new RenderNode[lodSizeChunks * lodHeightChunks * lodSizeChunks];
+            }
+
+            currentNodes = nodes[0];
+            oldNodes = nodes[1];
+        }
+
+        public void Update(int playerX, int playerY, int playerZ)
+        {
+            AddChunkPositions.Clear();
+            RemoveChunkPositions.Clear();
+            
+            int i = 0;
+            for (int x = 0; x < lodSizeChunks; x++)
+            {
+                for (int y = 0; y < lodHeightChunks; y++)
                 {
-                    int size = GetChunkSize(2);
-                    nodes[i] = new RenderNode(x * size, z * size, size, 2);
-                    nodes[i].Update(playerX, playerZ, chunkPositions);
-                    i++;
+                    for (int z = 0; z < lodSizeChunks; z++)
+                    {
+                        currentNodes[i] = new RenderNode(x * maxLodChunkSize, y * maxLodChunkSize, z * maxLodChunkSize,
+                            maxLodChunkSize, MaxLod);
+                        i++;
+                    }
                 }
             }
+            
+            for (int j = 0; j < currentNodes.Length; j++)
+            {
+                currentNodes[j].Update(playerX, playerY, playerZ, AddChunkPositions, RemoveChunkPositions, oldNodes[j], firstGen);
+            }
+            
+            SwapNodes();
+
+            firstGen = false;
+        }
+
+        private void SwapNodes()
+        {
+            oldNodes = nodes[currentNodesI];
+            currentNodesI = (currentNodesI + 1) % 2;
+            currentNodes = nodes[currentNodesI]; 
         }
         
         private static float Distance(int x0, int y0, int z0, int x1, int y1, int z1)
@@ -104,9 +201,9 @@ namespace Lod
             return MathF.Sqrt((x0 - x1) * (x0 - x1) + (y0 - y1) * (y0 - y1) + (z0 - z1) * (z0 - z1));
         }
 
-        private static int GetChunkSize(int lod)
+        private static int GetChunkScale(int lod)
         {
-            int size = ChunkSize;
+            int size = 1;
 
             for (int i = 0; i < lod; i++)
             {

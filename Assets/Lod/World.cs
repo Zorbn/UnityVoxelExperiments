@@ -58,7 +58,7 @@ namespace Lod
         {
             if (x < 0 || x >= Width ||
                 y < 0 || y >= Height ||
-                z < 0 || z >= Depth) return false;
+                z < 0 || z >= Depth) return true;
             
             int chunkX = x / ChunkSize;
             int chunkY = y / ChunkSize;
