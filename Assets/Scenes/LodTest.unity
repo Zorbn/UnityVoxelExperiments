@@ -281,6 +281,7 @@ GameObject:
   m_Component:
   - component: {fileID: 578847146}
   - component: {fileID: 578847145}
+  - component: {fileID: 578847147}
   m_Layer: 0
   m_Name: World
   m_TagString: Untagged
@@ -300,6 +301,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7519a6248a524f768a7971b86b095fbc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  chunkPool: {fileID: 578847147}
   playerTransform: {fileID: 1285461683}
   chunkRenderer: {fileID: 3481666464949520720, guid: e4f95d27ed15a014fb6a36f871c4195d, type: 3}
   worldSizeInChunks: 81
@@ -320,6 +322,18 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &578847147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 578847144}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7389eb428f124f3fb934f2255ae2ec62, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &948092918
 GameObject:
   m_ObjectHideFlags: 0

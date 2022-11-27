@@ -9,14 +9,17 @@ namespace Lod
     public class WorldRenderer : MonoBehaviour
     {
         public Transform playerTransform;
+        
+        public ChunkRendererPool chunkPool;
         public GameObject chunkRenderer;
+        
         public int worldSizeInChunks = 81;
         public int worldHeightInChunks = 2;
         public int chunkSize = 32;
-        private Stopwatch sw;
-        private readonly ConcurrentBag<QueuedRenderer> queuedRenders = new();
-        private readonly ConcurrentBag<QueuedRenderer> finishedRenders = new();
-        private readonly List<OldChunk> removeQueue = new();
+        
+        private readonly ConcurrentBag<QueuedRenderer> queuedRenderers = new();
+        private readonly ConcurrentBag<QueuedRenderer> finishedRenderers = new();
+        private readonly List<ChunkRendererPool.ChunkRendererData> removeQueue = new();
 
         private World world;
         private RenderTree renderTree;
@@ -26,24 +29,18 @@ namespace Lod
         private const int MeshingThreadCount = 4;
         private Thread[] meshingThreads;
         
-        // TODO: Use pool for gameobjects instead of instantiate delete
-
         private struct QueuedRenderer
         {
-            public ChunkRenderer Renderer;
-            public RenderTree.ChunkData Data;
+            public ChunkRendererPool.ChunkRendererData RendererData;
+            public RenderTree.ChunkData ChunkData;
         }
-        
-        private struct OldChunk
-        {
-            public GameObject GameObject;
-            public RenderTree.ChunkData Data;
-        }
-        
-        private readonly Dictionary<Vector3Int, GameObject> loadedChunks = new();
+
+        private readonly Dictionary<Vector3Int, ChunkRendererPool.ChunkRendererData> loadedChunks = new();
 
         public void Start()
         {
+            chunkPool.Init(chunkRenderer);
+            
             world = new World(worldSizeInChunks, worldHeightInChunks, worldSizeInChunks, chunkSize);
             world.Generate();
             
@@ -62,17 +59,24 @@ namespace Lod
         {
             while (true)
             {
-                while (queuedRenders.TryTake(out QueuedRenderer nextRenderer))
+                while (queuedRenderers.TryTake(out QueuedRenderer nextRenderer))
                 {
-                    if (!nextRenderer.Renderer) continue;
-                    
-                    nextRenderer.Renderer.GenerateMesh(world, nextRenderer.Data.Pos.x, nextRenderer.Data.Pos.y, nextRenderer.Data.Pos.z, nextRenderer.Data.Lod);
-                    finishedRenders.Add(nextRenderer);
+                    if (!nextRenderer.RendererData.ChunkRenderer) continue;
+
+                    nextRenderer.RendererData.ChunkRenderer.GenerateMesh(world, nextRenderer.ChunkData.Pos.x,
+                        nextRenderer.ChunkData.Pos.y, nextRenderer.ChunkData.Pos.z, nextRenderer.ChunkData.Lod);
+                    finishedRenderers.Add(nextRenderer);
                 }
             }
         }
 
         private void Update()
+        {
+            SwapLodAroundPlayer();
+            ProcessFinishedRenderers();
+        }
+
+        private void SwapLodAroundPlayer()
         {
             Vector3Int newPlayerChunkPos = Vector3Int.FloorToInt(playerTransform.position / chunkSize) * chunkSize;
 
@@ -82,17 +86,22 @@ namespace Lod
             }
             
             playerChunkPos = newPlayerChunkPos;
+        }
 
-            while (finishedRenders.TryTake(out QueuedRenderer nextRenderer))
+        private void ProcessFinishedRenderers()
+        {
+            while (finishedRenderers.TryTake(out QueuedRenderer nextRenderer))
             {
-                nextRenderer.Renderer.UpdateMesh();
+                nextRenderer.RendererData.ChunkRenderer.UpdateMesh();
+                nextRenderer.RendererData.MeshRenderer.enabled = true;
             }
 
-            if (finishedRenders.IsEmpty && queuedRenders.IsEmpty)
+            if (finishedRenderers.IsEmpty && queuedRenderers.IsEmpty)
             {
                 for (int i = removeQueue.Count - 1; i >= 0; i--)
                 {
-                    Destroy(removeQueue[i].GameObject);
+                    removeQueue[i].MeshRenderer.enabled = false;
+                    chunkPool.DestroyPooled(removeQueue[i]);
                     removeQueue.RemoveAt(i);
                 }
             }
@@ -100,7 +109,7 @@ namespace Lod
 
         private void UpdateChunks()
         {
-            if (!finishedRenders.IsEmpty || !queuedRenders.IsEmpty) return;
+            if (!finishedRenderers.IsEmpty || !queuedRenderers.IsEmpty) return;
             
             Vector3Int playerPos = Vector3Int.RoundToInt(playerTransform.position);
 
@@ -108,23 +117,18 @@ namespace Lod
 
             foreach (RenderTree.ChunkData data in renderTree.RemoveChunkPositions)
             {
-                GameObject oldChunk = loadedChunks[data.Pos];
+                ChunkRendererPool.ChunkRendererData oldChunk = loadedChunks[data.Pos];
                 loadedChunks.Remove(data.Pos);
-                
-                removeQueue.Add(new OldChunk
-                {
-                    Data = data,
-                    GameObject = oldChunk
-                });
+                removeQueue.Add(oldChunk);
             }
             
             foreach (RenderTree.ChunkData data in renderTree.AddChunkPositions)
             {
-                GameObject newChunk = Instantiate(chunkRenderer, data.Pos, Quaternion.identity);
-                queuedRenders.Add(new QueuedRenderer
+                ChunkRendererPool.ChunkRendererData newChunk = chunkPool.InstantiatePooled(data.Pos, Quaternion.identity);
+                queuedRenderers.Add(new QueuedRenderer
                 {
-                    Data = data,
-                    Renderer = newChunk.GetComponent<ChunkRenderer>()
+                    ChunkData = data,
+                    RendererData = newChunk
                 });
                 loadedChunks.Add(data.Pos, newChunk);
             }

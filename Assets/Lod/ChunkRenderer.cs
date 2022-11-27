@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -28,6 +27,9 @@ namespace Lod
 
         public void GenerateMesh(World world, int chunkX, int chunkY, int chunkZ, int lodLevel)
         {
+            vertices.Clear();
+            indices.Clear();
+            
             int lod = 1;
 
             for (int i = 0; i < lodLevel; i++)
@@ -64,6 +66,7 @@ namespace Lod
 
         public void UpdateMesh()
         {
+            mesh.Clear();
             mesh.SetVertices(vertices);
             mesh.SetIndices(indices, MeshTopology.Triangles, 0);
         }
