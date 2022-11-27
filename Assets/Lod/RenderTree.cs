@@ -27,11 +27,13 @@ namespace Lod
         {
             public RenderNode[] Children;
             public bool HasChildren;
+            
             public int Lod;
             public int X, Y, Z;
             public int Size;
-            public bool Active;
             public int HalfSize;
+            
+            public bool Active;
 
             public RenderNode(int x, int y, int z, int size, int lod)
             {
@@ -79,7 +81,7 @@ namespace Lod
                             oldNode.RemoveBranch(removeChunkPositions);
                         }
 
-                        // Add this node. Predecessors are any/all the nodes removed by remove branch.
+                        // Add this node.
                         addChunkPositions.Add(new ChunkData(X, Y, Z, Lod));
                     }
                 }
@@ -108,8 +110,7 @@ namespace Lod
                 {
                     removeChunkPositions.Add(new ChunkData(X, Y, Z, Lod));
                 }
-
-                // The predecessor of all of these nodes is the node just removed if it was.
+                
                 for (int i = 0; i < 8; i++)
                 {
                     RenderNode oldChild = oldNodeWasLeaf ? InactiveNode() : oldNode.Children[i];

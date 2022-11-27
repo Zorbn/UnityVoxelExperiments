@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace Lod
 {
@@ -15,8 +14,9 @@ namespace Lod
         public int worldHeightInChunks = 2;
         public int chunkSize = 32;
         private Stopwatch sw;
-        private ConcurrentBag<QueuedRenderer> queuedRenders = new();
-        private ConcurrentBag<QueuedRenderer> finishedRenders = new();
+        private readonly ConcurrentBag<QueuedRenderer> queuedRenders = new();
+        private readonly ConcurrentBag<QueuedRenderer> finishedRenders = new();
+        private readonly List<OldChunk> removeQueue = new();
 
         private World world;
         private RenderTree renderTree;
@@ -25,10 +25,18 @@ namespace Lod
 
         private const int MeshingThreadCount = 4;
         private Thread[] meshingThreads;
+        
+        // TODO: Use pool for gameobjects instead of instantiate delete
 
         private struct QueuedRenderer
         {
             public ChunkRenderer Renderer;
+            public RenderTree.ChunkData Data;
+        }
+        
+        private struct OldChunk
+        {
+            public GameObject GameObject;
             public RenderTree.ChunkData Data;
         }
         
@@ -48,31 +56,24 @@ namespace Lod
                 meshingThreads[i] = new Thread(MeshingThread);
                 meshingThreads[i].Start();
             }
-            
-            // UpdateChunks();
         }
 
         private void MeshingThread()
         {
             while (true)
             {
-                while (queuedRenders.TryTake(out QueuedRenderer next))
+                while (queuedRenders.TryTake(out QueuedRenderer nextRenderer))
                 {
-                    if (next.Renderer == null) continue;
+                    if (!nextRenderer.Renderer) continue;
                     
-                    next.Renderer.GenerateMesh(world, next.Data.Pos.x, next.Data.Pos.y, next.Data.Pos.z, next.Data.Lod);
-                    finishedRenders.Add(next);
+                    nextRenderer.Renderer.GenerateMesh(world, nextRenderer.Data.Pos.x, nextRenderer.Data.Pos.y, nextRenderer.Data.Pos.z, nextRenderer.Data.Lod);
+                    finishedRenders.Add(nextRenderer);
                 }
             }
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.G))
-            {
-                UpdateChunks();
-            }
-
             Vector3Int newPlayerChunkPos = Vector3Int.FloorToInt(playerTransform.position / chunkSize) * chunkSize;
 
             if (playerChunkPos != newPlayerChunkPos)
@@ -82,30 +83,41 @@ namespace Lod
             
             playerChunkPos = newPlayerChunkPos;
 
-            if (finishedRenders.TryTake(out QueuedRenderer next))
+            while (finishedRenders.TryTake(out QueuedRenderer nextRenderer))
             {
-                next.Renderer.UpdateMesh();
+                nextRenderer.Renderer.UpdateMesh();
+            }
+
+            if (finishedRenders.IsEmpty && queuedRenders.IsEmpty)
+            {
+                for (int i = removeQueue.Count - 1; i >= 0; i--)
+                {
+                    Destroy(removeQueue[i].GameObject);
+                    removeQueue.RemoveAt(i);
+                }
             }
         }
 
         private void UpdateChunks()
         {
+            if (!finishedRenders.IsEmpty || !queuedRenders.IsEmpty) return;
+            
             Vector3Int playerPos = Vector3Int.RoundToInt(playerTransform.position);
 
-            sw = new();
-            sw.Start();
             renderTree.Update(playerPos.x, playerPos.y, playerPos.z);
-            Debug.Log($"{sw.ElapsedMilliseconds} -> {renderTree.AddChunkPositions.Count}, {renderTree.RemoveChunkPositions.Count}");
-            sw.Reset();
 
             foreach (RenderTree.ChunkData data in renderTree.RemoveChunkPositions)
             {
                 GameObject oldChunk = loadedChunks[data.Pos];
                 loadedChunks.Remove(data.Pos);
-                Destroy(oldChunk);
+                
+                removeQueue.Add(new OldChunk
+                {
+                    Data = data,
+                    GameObject = oldChunk
+                });
             }
             
-            sw.Start();
             foreach (RenderTree.ChunkData data in renderTree.AddChunkPositions)
             {
                 GameObject newChunk = Instantiate(chunkRenderer, data.Pos, Quaternion.identity);
@@ -116,8 +128,6 @@ namespace Lod
                 });
                 loadedChunks.Add(data.Pos, newChunk);
             }
-            Debug.Log($"{sw.ElapsedMilliseconds}");
-            sw.Reset();
         }
     }
 }
