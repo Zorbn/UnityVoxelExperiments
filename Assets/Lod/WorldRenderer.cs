@@ -16,11 +16,15 @@ namespace Lod
         public int chunkSize = 32;
         private Stopwatch sw;
         private ConcurrentBag<QueuedRenderer> queuedRenders = new();
+        private ConcurrentBag<QueuedRenderer> finishedRenders = new();
 
         private World world;
         private RenderTree renderTree;
 
         private Vector3Int playerChunkPos;
+
+        private const int MeshingThreadCount = 4;
+        private Thread[] meshingThreads;
 
         private struct QueuedRenderer
         {
@@ -37,8 +41,13 @@ namespace Lod
             
             renderTree = new RenderTree(worldSizeInChunks, worldHeightInChunks);
 
-            Thread meshingThread = new Thread(MeshingThread);
-            meshingThread.Start();
+            meshingThreads = new Thread[MeshingThreadCount];
+            
+            for (int i = 0; i < MeshingThreadCount; i++)
+            {
+                meshingThreads[i] = new Thread(MeshingThread);
+                meshingThreads[i].Start();
+            }
             
             // UpdateChunks();
         }
@@ -52,6 +61,7 @@ namespace Lod
                     if (next.Renderer == null) continue;
                     
                     next.Renderer.GenerateMesh(world, next.Data.Pos.x, next.Data.Pos.y, next.Data.Pos.z, next.Data.Lod);
+                    finishedRenders.Add(next);
                 }
             }
         }
@@ -71,6 +81,11 @@ namespace Lod
             }
             
             playerChunkPos = newPlayerChunkPos;
+
+            if (finishedRenders.TryTake(out QueuedRenderer next))
+            {
+                next.Renderer.UpdateMesh();
+            }
         }
 
         private void UpdateChunks()

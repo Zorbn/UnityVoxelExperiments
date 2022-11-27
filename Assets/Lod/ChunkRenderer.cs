@@ -15,7 +15,6 @@ namespace Lod
 
         private List<Vector3> vertices = new();
         private List<int> indices = new();
-        private bool needsUpdate;
         
         private void Awake()
         {
@@ -61,18 +60,12 @@ namespace Lod
                     }
                 }
             }
-
-            needsUpdate = true;
         }
 
-        private void Update()
+        public void UpdateMesh()
         {
-            if (needsUpdate)
-            {
-                mesh.SetVertices(vertices);
-                mesh.SetIndices(indices, MeshTopology.Triangles, 0);
-                needsUpdate = false;
-            }
+            mesh.SetVertices(vertices);
+            mesh.SetIndices(indices, MeshTopology.Triangles, 0);
         }
 
         private void GenerateFace(Direction dir, int x, int y, int z, int lod)
